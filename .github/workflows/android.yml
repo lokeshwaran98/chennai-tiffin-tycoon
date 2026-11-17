@@ -66,10 +66,11 @@ jobs:
       - name: Smoke test (run game headless, fail on script errors)
         run: |
           godot --headless --import || true
-          timeout 120 godot --headless --quit-after 240 2>&1 | tee smoke.log || true
+          timeout 180 godot --headless --fixed-fps 60 --quit-after 1500 -- --smoke 2>&1 | tee smoke.log || true
           if grep -E "SCRIPT ERROR|Parse Error|Invalid call|Invalid access|Identifier not found" smoke.log; then
             echo "Smoke test found script errors"; exit 1
           fi
+          grep -q "SMOKE_DONE" smoke.log || { echo "Smoke actions did not finish"; exit 1; }
           echo "Smoke test clean"
 
       - name: Import project and export APK
