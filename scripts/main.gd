@@ -49,6 +49,20 @@ func _ready() -> void:
 		_show_offline_popup()
 	if OS.get_cmdline_user_args().has("--smoke"):
 		_run_smoke_actions()
+	if OS.get_cmdline_user_args().has("--shot"):
+		_take_shot()
+
+# CI-only: render a screenshot (software GL under xvfb) so the look can be reviewed.
+func _take_shot() -> void:
+	await get_tree().create_timer(9.0).timeout
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	var path := OS.get_environment("SHOT_PATH")
+	if path == "":
+		path = "user://shot.png"
+	img.save_png(path)
+	print("SHOT_SAVED ", path, " ", img.get_size())
+	get_tree().quit()
 
 # CI-only: exercise buying, ads, daily reward and prestige without a screen.
 func _run_smoke_actions() -> void:

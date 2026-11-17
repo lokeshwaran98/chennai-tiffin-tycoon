@@ -36,7 +36,7 @@ var offline_gain: float = 0.0
 
 func _ready() -> void:
 	load_game()
-	if OS.get_cmdline_user_args().has("--smoke"):
+	if OS.get_cmdline_user_args().has("--smoke") or OS.get_cmdline_user_args().has("--shot"):
 		# CI-only seed so customers, milestones, offline popup and prestige run.
 		coins = 5.0e7
 		run_earned = 9.0e6

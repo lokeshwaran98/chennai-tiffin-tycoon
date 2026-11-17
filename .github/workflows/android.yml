@@ -73,6 +73,23 @@ jobs:
           grep -q "SMOKE_DONE" smoke.log || { echo "Smoke actions did not finish"; exit 1; }
           echo "Smoke test clean"
 
+      - name: Render screenshot (software GL)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 mesa-vulkan-drivers >/dev/null
+          export SHOT_PATH="$PWD/shot.png"
+          xvfb-run -a -s "-screen 0 1280x1400x24" timeout 120 godot --rendering-driver opengl3 --resolution 540x960 -- --shot 2>&1 | tail -15 || true
+          ls -la shot.png
+          mkdir -p /tmp/shotrepo && cp shot.png /tmp/shotrepo/
+          cd /tmp/shotrepo
+          git init -q -b screenshots
+          git -c user.name=ci -c user.email=ci@example.com add shot.png
+          git -c user.name=ci -c user.email=ci@example.com commit -qm "screenshot"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" screenshots
+
       - name: Import project and export APK
         run: |
           set -e
