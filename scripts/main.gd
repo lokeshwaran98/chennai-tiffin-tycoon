@@ -52,6 +52,8 @@ func _ready() -> void:
 	_build_customers()
 	_build_ui()
 	GameState.changed.connect(_refresh)
+	AdService.ad_unavailable.connect(func():
+		_float_text("Ad not ready - try again in a moment", Vector2(180.0, 620.0)))
 	_refresh()
 	if GameState.offline_gain > 0.0 and not OS.get_cmdline_user_args().has("--shot"):
 		_show_offline_popup()

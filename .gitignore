@@ -2,3 +2,7 @@
 build/
 *.keystore
 .import/
+android/
+addons/
+smoke.log
+shot.png
