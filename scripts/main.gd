@@ -36,7 +36,12 @@ var stall_buttons: Array = []
 var prestige_button: Button
 var daily_button: Button
 var daily_ad_button: Button
-var prestige_dialog: ConfirmationDialog
+var modal_dim: ColorRect
+var modal_title: Label
+var modal_body: Label
+var modal_ok: Button
+var modal_cancel: Button
+var _modal_cb: Callable
 
 func _ready() -> void:
 	randomize()
@@ -130,10 +135,12 @@ func _add_sphere(parent: Node3D, radius: float, pos: Vector3, c: Color) -> MeshI
 func _build_world() -> void:
 	var cam := Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.size = 15.0
+	cam.keep_aspect = Camera3D.KEEP_WIDTH
+	cam.size = 27.0
+	cam.v_offset = -6.0
 	cam.position = Vector3(10, 10, 10)
 	add_child(cam)
-	cam.look_at(Vector3(0, 0, 2), Vector3.UP)
+	cam.look_at(Vector3(0, 0, 1), Vector3.UP)
 
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-50, 40, 0)
@@ -259,31 +266,56 @@ func _update_customers(delta: float) -> void:
 			c.node.position += to / dist * minf(WALK_SPEED * delta, dist)
 
 # ---------------------------------------------------------------------- UI
+func _box(c: Color, radius: int = 18) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = c
+	sb.set_corner_radius_all(radius)
+	sb.content_margin_left = 16
+	sb.content_margin_right = 16
+	sb.content_margin_top = 10
+	sb.content_margin_bottom = 10
+	return sb
+
+func _style_button(b: Button, base: Color) -> void:
+	b.add_theme_stylebox_override("normal", _box(base))
+	b.add_theme_stylebox_override("hover", _box(base.lightened(0.12)))
+	b.add_theme_stylebox_override("pressed", _box(base.darkened(0.2)))
+	b.add_theme_stylebox_override("disabled", _box(Color("4a4540")))
+	b.add_theme_color_override("font_color", Color.WHITE)
+	b.add_theme_color_override("font_hover_color", Color.WHITE)
+	b.add_theme_color_override("font_pressed_color", Color.WHITE)
+	b.add_theme_color_override("font_disabled_color", Color("a8a199"))
+
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
-	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 24)
-	margin.add_theme_constant_override("margin_right", 24)
-	margin.add_theme_constant_override("margin_top", 40)
-	margin.add_theme_constant_override("margin_bottom", 24)
-	layer.add_child(margin)
+
+	# Top HUD with a translucent backing so numbers stay readable.
+	var hud := PanelContainer.new()
+	hud.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	hud.add_theme_stylebox_override("panel", _box(Color(0, 0, 0, 0.45), 0))
+	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(hud)
+	var hud_box := VBoxContainer.new()
+	hud_box.add_theme_constant_override("separation", 2)
+	hud_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud.add_child(hud_box)
+	coin_label = _make_label(hud_box, 76)
+	rate_label = _make_label(hud_box, 42)
+	status_label = _make_label(hud_box, 34)
+
+	# Bottom control panel (solid) so the street above stays visible.
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	panel.add_theme_stylebox_override("panel", _box(Color("2a211a"), 28))
+	layer.add_child(panel)
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 10)
-	margin.add_child(root)
-
-	coin_label = _make_label(root, 72)
-	rate_label = _make_label(root, 40)
-	status_label = _make_label(root, 34)
-
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(spacer)
+	root.add_theme_constant_override("separation", 12)
+	panel.add_child(root)
 
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 700)
+	scroll.custom_minimum_size = Vector2(0, 640)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	root.add_child(scroll)
 	var list := VBoxContainer.new()
@@ -291,53 +323,95 @@ func _build_ui() -> void:
 	list.add_theme_constant_override("separation", 10)
 	scroll.add_child(list)
 
-	tap_button = _make_button(list, "", 50)
+	tap_button = _make_button(list, "", 48, Color("d9531e"))
+	tap_button.custom_minimum_size = Vector2(0, 150)
 	tap_button.pressed.connect(_on_tap)
 
 	for i in GameState.STALLS.size():
-		var b := _make_button(list, "", 36)
+		var b := _make_button(list, "", 36, STALL_COLORS[i].darkened(0.1))
 		b.pressed.connect(func(): GameState.buy_stall(i))
 		stall_buttons.append(b)
 
-	prestige_button = _make_button(list, "", 34)
-	prestige_button.pressed.connect(func(): prestige_dialog.popup_centered(Vector2i(900, 460)))
+	prestige_button = _make_button(list, "", 34, Color("8a3fb5"))
+	prestige_button.pressed.connect(func():
+		_show_modal("Open a new branch?",
+			"Your stalls and coins reset, but you keep a permanent income bonus.",
+			"Open branch", "Cancel", func(): GameState.prestige()))
 
-	daily_button = _make_button(list, "", 34)
+	daily_button = _make_button(list, "", 34, Color("2f8f5a"))
 	daily_button.pressed.connect(func(): GameState.claim_daily(1.0))
-	daily_ad_button = _make_button(list, "", 34)
+	daily_ad_button = _make_button(list, "", 34, Color("2a7fb5"))
 	daily_ad_button.pressed.connect(func(): AdService.show_rewarded("daily3"))
 
 	var ads := HBoxContainer.new()
 	ads.add_theme_constant_override("separation", 12)
 	root.add_child(ads)
-	var boost_btn := _make_button(ads, "Watch ad:\n2x income 30 min", 32)
-	boost_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var boost_btn := _make_button(ads, "Watch ad:\n2x income 30 min", 32, Color("2a7fb5"))
 	boost_btn.pressed.connect(func(): AdService.show_rewarded("boost"))
-	var chest_btn := _make_button(ads, "Watch ad:\nFree chest", 32)
-	chest_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var chest_btn := _make_button(ads, "Watch ad:\nFree chest", 32, Color("2a7fb5"))
 	chest_btn.pressed.connect(func(): AdService.show_rewarded("chest"))
 
-	prestige_dialog = ConfirmationDialog.new()
-	prestige_dialog.title = "Open a new branch?"
-	prestige_dialog.dialog_text = "Your stalls and coins reset, but you keep a permanent income bonus."
-	prestige_dialog.ok_button_text = "Open branch"
-	prestige_dialog.confirmed.connect(func(): GameState.prestige())
-	add_child(prestige_dialog)
+	_build_modal()
+
+func _build_modal() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 10
+	add_child(layer)
+	modal_dim = ColorRect.new()
+	modal_dim.color = Color(0, 0, 0, 0.65)
+	modal_dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	modal_dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	modal_dim.visible = false
+	layer.add_child(modal_dim)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	modal_dim.add_child(center)
+	var pc := PanelContainer.new()
+	pc.custom_minimum_size = Vector2(900, 0)
+	pc.add_theme_stylebox_override("panel", _box(Color("3a2e24"), 28))
+	center.add_child(pc)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 24)
+	pc.add_child(vb)
+	modal_title = _make_label(vb, 56)
+	modal_body = _make_label(vb, 40)
+	modal_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	vb.add_child(row)
+	modal_cancel = _make_button(row, "Cancel", 38, Color("6a6058"))
+	modal_ok = _make_button(row, "OK", 38, Color("d9531e"))
+	modal_cancel.pressed.connect(func(): modal_dim.visible = false)
+	modal_ok.pressed.connect(func():
+		modal_dim.visible = false
+		if _modal_cb.is_valid():
+			_modal_cb.call())
+
+func _show_modal(title: String, body: String, ok_text: String, cancel_text: String, cb: Callable) -> void:
+	modal_title.text = title
+	modal_body.text = body
+	modal_ok.text = ok_text
+	modal_cancel.text = cancel_text
+	modal_cancel.visible = cancel_text != ""
+	_modal_cb = cb
+	modal_dim.visible = true
 
 func _make_label(parent: Control, size: int) -> Label:
 	var l := Label.new()
 	l.add_theme_font_size_override("font_size", size)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	parent.add_child(l)
 	return l
 
-func _make_button(parent: Control, text: String, size: int) -> Button:
+func _make_button(parent: Control, text: String, size: int, base: Color) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size = Vector2(0, 120)
 	b.add_theme_font_size_override("font_size", size)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_button(b, base)
 	parent.add_child(b)
 	return b
 
@@ -347,14 +421,9 @@ func _on_tap() -> void:
 	Input.vibrate_handheld(15)
 
 func _show_offline_popup() -> void:
-	var dlg := AcceptDialog.new()
-	dlg.title = "Welcome back!"
-	dlg.dialog_text = "You earned %s while away.\nWatch an ad to double it?" % GameState.format_num(GameState.offline_gain)
-	dlg.ok_button_text = "Watch ad (x2)"
-	dlg.add_cancel_button("No thanks")
-	dlg.confirmed.connect(func(): AdService.show_rewarded("offline"))
-	add_child(dlg)
-	dlg.popup_centered(Vector2i(900, 420))
+	_show_modal("Welcome back!",
+		"You earned %s while away.\nWatch an ad to double it?" % GameState.format_num(GameState.offline_gain),
+		"Watch ad (x2)", "No thanks", func(): AdService.show_rewarded("offline"))
 
 func _fmt_time(sec: int) -> String:
 	return "%d:%02d" % [floori(sec / 60.0), sec % 60]
