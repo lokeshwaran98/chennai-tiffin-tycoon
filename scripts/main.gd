@@ -50,7 +50,7 @@ func _ready() -> void:
 	_build_ui()
 	GameState.changed.connect(_refresh)
 	_refresh()
-	if GameState.offline_gain > 0.0:
+	if GameState.offline_gain > 0.0 and not OS.get_cmdline_user_args().has("--shot"):
 		_show_offline_popup()
 	if OS.get_cmdline_user_args().has("--smoke"):
 		_run_smoke_actions()
@@ -136,7 +136,7 @@ func _build_world() -> void:
 	var cam := Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
 	cam.keep_aspect = Camera3D.KEEP_WIDTH
-	cam.size = 27.0
+	cam.size = 23.0
 	cam.v_offset = -6.0
 	cam.position = Vector3(10, 10, 10)
 	add_child(cam)
@@ -158,14 +158,14 @@ func _build_world() -> void:
 	add_child(env)
 
 	# Ground, road and footpath
-	_add_box(self, Vector3(34, 0.2, 34), Vector3(0, -0.1, 0), Color("c9b27a"))
-	_add_box(self, Vector3(34, 0.22, 4.0), Vector3(0, -0.09, 9.0), Color("55585c"))
-	_add_box(self, Vector3(34, 0.26, 1.2), Vector3(0, -0.07, 6.2), Color("b9b2a0"))
-	for x in range(-14, 15, 4):
+	_add_box(self, Vector3(80, 0.2, 80), Vector3(0, -0.1, 0), Color("c9b27a"))
+	_add_box(self, Vector3(80, 0.22, 4.0), Vector3(0, -0.09, 9.0), Color("55585c"))
+	_add_box(self, Vector3(80, 0.26, 1.2), Vector3(0, -0.07, 6.2), Color("b9b2a0"))
+	for x in range(-30, 31, 4):
 		_add_box(self, Vector3(1.6, 0.02, 0.2), Vector3(x, 0.03, 9.0), Color("e8e2c8"))
 
 	# Palm trees (trunk + leaf clusters)
-	for p in [Vector3(-11, 0, -7), Vector3(11, 0, -7), Vector3(-11, 0, 3), Vector3(12, 0, 3)]:
+	for p in [Vector3(-9.5, 0, -7), Vector3(9.5, 0, -7), Vector3(-9.5, 0, 3), Vector3(9.5, 0, 3), Vector3(0, 0, -8.5)]:
 		var tree := Node3D.new()
 		tree.position = p
 		add_child(tree)
