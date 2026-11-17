@@ -9,6 +9,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
+Sfx="*res://scripts/sfx.gd"
 GameState="*res://scripts/game_state.gd"
 AdService="*res://scripts/ad_service.gd"
 

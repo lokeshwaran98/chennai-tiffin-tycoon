@@ -11,6 +11,7 @@ const ACCENT_COLORS := [
 	Color("f7dc9a"), Color("e8b36a"), Color("d9c27a")]
 const CUSTOMER_COLORS := [
 	Color("2f6fb5"), Color("b53f6a"), Color("3f9e6a"), Color("8a5bb5"), Color("d08a2f")]
+const SIGN_TEXT := ["COFFEE", "IDLI DOSA", "PONGAL", "SUNDAL", "BIRIYANI", "KOTHU"]
 const MAX_CUSTOMERS := 12
 const WALK_SPEED := 4.0
 
@@ -36,6 +37,8 @@ var stall_buttons: Array = []
 var prestige_button: Button
 var daily_button: Button
 var daily_ad_button: Button
+var popup_layer: CanvasLayer
+var sound_button: Button
 var modal_dim: ColorRect
 var modal_title: Label
 var modal_body: Label
@@ -194,10 +197,47 @@ func _make_stall(i: int) -> Node3D:
 	_add_box(s, Vector3(3.0, 0.14, 2.1), Vector3(0, 2.25, 0.1), c)                # awning
 	_add_box(s, Vector3(3.0, 0.3, 0.1), Vector3(0, 2.0, 1.1), c.lightened(0.25))  # awning fringe
 	var acc: Color = ACCENT_COLORS[i]
-	_add_cyl(s, 0.38, 0.45, Vector3(-0.6, 1.35, 0), acc)                          # pot / tray
-	_add_sphere(s, 0.3, Vector3(0.55, 1.33, 0.1), acc.darkened(0.1))             # food heap
 	_add_box(s, Vector3(0.5, 0.5, 0.4), Vector3(0.9, 0.3, -0.3), Color("3a3a3a")) # stove
+	_make_topper(s, i)
+	# Name sign on top of the awning
+	_add_box(s, Vector3(2.1, 0.55, 0.08), Vector3(0, 2.8, 0.95), Color("2a211a"))
+	var lbl := Label3D.new()
+	lbl.text = SIGN_TEXT[i]
+	lbl.font_size = 56
+	lbl.pixel_size = 0.0075
+	lbl.position = Vector3(0, 2.8, 1.01)
+	lbl.modulate = acc
+	s.add_child(lbl)
 	return s
+
+func _make_topper(s: Node3D, i: int) -> void:
+	var y := 1.11
+	match i:
+		0: # filter coffee: tumblers + kettle
+			for k in 3:
+				_add_cyl(s, 0.13, 0.22, Vector3(-0.8 + k * 0.32, y + 0.11, 0.25), Color("c9ccd1"))
+			_add_cyl(s, 0.3, 0.6, Vector3(0.6, y + 0.3, -0.1), Color("b8bcc2"))
+		1: # idli stack + dosa tawa
+			for k in 3:
+				var sp := _add_sphere(s, 0.28, Vector3(-0.6, y + 0.12 + k * 0.14, 0.1), Color("fffaf0"))
+				sp.scale = Vector3(1.0, 0.45, 1.0)
+			_add_cyl(s, 0.5, 0.06, Vector3(0.55, y + 0.03, 0.05), Color("2b2b2b"))
+		2: # pongal pot + vadas
+			_add_cyl(s, 0.38, 0.45, Vector3(-0.6, y + 0.22, 0.0), Color("b5651d"))
+			for k in 3:
+				_add_sphere(s, 0.14, Vector3(0.3 + k * 0.3, y + 0.12, 0.2), Color("8b4a1f"))
+		3: # sundal baskets
+			_add_cyl(s, 0.42, 0.35, Vector3(-0.5, y + 0.17, 0.0), Color("a8793c"))
+			_add_sphere(s, 0.34, Vector3(-0.5, y + 0.4, 0.0), Color("e8c14a"))
+			_add_cyl(s, 0.25, 0.3, Vector3(0.6, y + 0.15, 0.1), Color("6fae4a"))
+		4: # biryani handi
+			_add_sphere(s, 0.5, Vector3(-0.4, y + 0.4, 0.0), Color("b8672d"))
+			_add_cyl(s, 0.2, 0.18, Vector3(-0.4, y + 0.95, 0.0), Color("8a4a1f"))
+			_add_cyl(s, 0.3, 0.12, Vector3(0.6, y + 0.06, 0.1), Color("f0d9a0"))
+		_: # kothu parotta: big tawa + heap + spatula
+			_add_cyl(s, 0.7, 0.06, Vector3(-0.3, y + 0.03, 0.05), Color("2b2b2b"))
+			_add_sphere(s, 0.28, Vector3(-0.3, y + 0.2, 0.05), Color("d9a24a"))
+			_add_box(s, Vector3(0.1, 0.1, 0.8), Vector3(0.7, y + 0.2, 0.0), Color("9aa0a6"))
 
 # --------------------------------------------------------------- customers
 func _build_customers() -> void:
@@ -212,6 +252,7 @@ func _build_customers() -> void:
 		mi.mesh = cap
 		mi.material_override = _mat(CUSTOMER_COLORS[i % CUSTOMER_COLORS.size()])
 		mi.visible = false
+		_add_sphere(mi, 0.22, Vector3(0, 0.75, 0), Color("e0b48a"))
 		add_child(mi)
 		c.node = mi
 		customers.append(c)
@@ -289,6 +330,9 @@ func _style_button(b: Button, base: Color) -> void:
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
+	popup_layer = CanvasLayer.new()
+	popup_layer.layer = 5
+	add_child(popup_layer)
 
 	# Top HUD with a translucent backing so numbers stay readable.
 	var hud := PanelContainer.new()
@@ -342,6 +386,9 @@ func _build_ui() -> void:
 	daily_button.pressed.connect(func(): GameState.claim_daily(1.0))
 	daily_ad_button = _make_button(list, "", 34, Color("2a7fb5"))
 	daily_ad_button.pressed.connect(func(): AdService.show_rewarded("daily3"))
+
+	sound_button = _make_button(list, "", 32, Color("6a6058"))
+	sound_button.pressed.connect(func(): GameState.set_sound(not GameState.sound_on))
 
 	var ads := HBoxContainer.new()
 	ads.add_theme_constant_override("separation", 12)
@@ -418,7 +465,26 @@ func _make_button(parent: Control, text: String, size: int, base: Color) -> Butt
 func _on_tap() -> void:
 	GameState.tap()
 	_bounce = 1.0
+	Sfx.play("tap")
 	Input.vibrate_handheld(15)
+	_float_text("+" + GameState.format_num(GameState.tap_value()),
+		get_viewport().get_mouse_position() + Vector2(-50.0, -90.0))
+
+func _float_text(text: String, from: Vector2) -> void:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", 56)
+	l.add_theme_color_override("font_color", Color("ffe066"))
+	l.add_theme_color_override("font_outline_color", Color.BLACK)
+	l.add_theme_constant_override("outline_size", 10)
+	l.position = from
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	popup_layer.add_child(l)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(l, "position:y", from.y - 150.0, 0.7)
+	tw.tween_property(l, "modulate:a", 0.0, 0.7)
+	tw.chain().tween_callback(l.queue_free)
 
 func _show_offline_popup() -> void:
 	_show_modal("Welcome back!",
@@ -449,6 +515,7 @@ func _refresh() -> void:
 		stall_buttons[i].disabled = GameState.coins < cost
 		stall_nodes[i].visible = GameState.levels[i] > 0
 
+	sound_button.text = "Sound: %s" % ("On" if GameState.sound_on else "Off")
 	var gain := GameState.prestige_gain()
 	prestige_button.visible = gain > 0
 	prestige_button.text = "Open new branch: +%d bonus (%.0f%% income each)" % [gain, GameState.PRESTIGE_BONUS_EACH * 100.0]

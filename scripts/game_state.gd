@@ -33,9 +33,11 @@ var boost_until: int = 0        # unix time, 2x income while active
 var last_seen: int = 0
 var last_daily: int = 0
 var offline_gain: float = 0.0
+var sound_on: bool = true
 
 func _ready() -> void:
 	load_game()
+	Sfx.set_enabled(sound_on)
 	if OS.get_cmdline_user_args().has("--smoke") or OS.get_cmdline_user_args().has("--shot"):
 		# CI-only seed so customers, milestones, offline popup and prestige run.
 		coins = 5.0e7
@@ -95,6 +97,7 @@ func buy_stall(i: int) -> bool:
 		return false
 	coins -= c
 	levels[i] += 1
+	Sfx.play("buy")
 	changed.emit()
 	return true
 
@@ -104,6 +107,7 @@ func buy_tap() -> bool:
 		return false
 	coins -= c
 	tap_level += 1
+	Sfx.play("buy")
 	changed.emit()
 	return true
 
@@ -123,6 +127,7 @@ func prestige() -> void:
 	if g <= 0:
 		return
 	prestige_points += g
+	Sfx.play("reward")
 	coins = 15.0
 	run_earned = 0.0
 	tap_level = 1
@@ -161,7 +166,14 @@ func double_offline() -> void:
 	offline_gain = 0.0
 	changed.emit()
 
+func set_sound(on: bool) -> void:
+	sound_on = on
+	Sfx.set_enabled(on)
+	changed.emit()
+	save_game()
+
 func _on_reward(kind: String) -> void:
+	Sfx.play("reward")
 	match kind:
 		"boost":
 			boost_until = now() + BOOST_SECONDS
@@ -191,7 +203,7 @@ func save_game() -> void:
 			"coins": coins, "run_earned": run_earned, "levels": levels,
 			"tap_level": tap_level, "prestige_points": prestige_points,
 			"boost_until": boost_until, "last_seen": last_seen,
-			"last_daily": last_daily}))
+			"last_daily": last_daily, "sound_on": sound_on}))
 
 func load_game() -> void:
 	if not FileAccess.file_exists(SAVE_PATH):
@@ -209,6 +221,7 @@ func load_game() -> void:
 	boost_until = int(data.get("boost_until", 0))
 	last_seen = int(data.get("last_seen", 0))
 	last_daily = int(data.get("last_daily", 0))
+	sound_on = bool(data.get("sound_on", true))
 	var lv = data.get("levels", [])
 	for i in mini(lv.size(), levels.size()):
 		levels[i] = int(lv[i])
