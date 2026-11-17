@@ -63,6 +63,15 @@ jobs:
           export/android/debug_keystore_pass = "android"
           EOF
 
+      - name: Smoke test (run game headless, fail on script errors)
+        run: |
+          godot --headless --import || true
+          timeout 120 godot --headless --quit-after 240 2>&1 | tee smoke.log || true
+          if grep -E "SCRIPT ERROR|Parse Error|Invalid call|Invalid access|Identifier not found" smoke.log; then
+            echo "Smoke test found script errors"; exit 1
+          fi
+          echo "Smoke test clean"
+
       - name: Import project and export APK
         run: |
           set -e
