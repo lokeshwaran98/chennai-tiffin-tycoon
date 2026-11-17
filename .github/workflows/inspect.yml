@@ -1,0 +1,37 @@
+name: Inspect AdMob plugin
+
+on:
+  push:
+    paths:
+      - ".github/workflows/inspect.yml"
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Plugin and android library releases
+        run: |
+          set -x
+          gh api repos/poingstudios/godot-admob-plugin/releases/latest --jq '.tag_name, (.assets[] | "\(.name) \(.size)")'
+          gh api repos/poingstudios/godot-admob-android/releases/latest --jq '.tag_name, (.assets[] | "\(.name) \(.size)")'
+          gh api repos/godotengine/godot/releases --jq '.[0:6][] | .tag_name' || true
+      - name: Download and list
+        run: |
+          mkdir -p p a && cd p
+          gh release download --repo poingstudios/godot-admob-plugin --pattern '*.zip' || true
+          ls -la; for z in *.zip; do unzip -q -o "$z" -d x; done
+          find x -maxdepth 4 | head -80
+          echo "=== plugin.cfg ==="; find x -name plugin.cfg -exec cat {} \;
+          echo "=== export / settings scripts ==="
+          grep -rIl "EditorExportPlugin\|add_setting\|ProjectSettings.set_setting" x | head -20
+          cd ../a
+          gh release download --repo poingstudios/godot-admob-android --pattern '*' || true
+          ls -la
+      - name: Show export plugin and setting keys
+        run: |
+          cd p
+          for f in $(grep -rIl "EditorExportPlugin" x | head -5); do echo "=== $f ==="; sed -n '1,140p' "$f"; done
+          echo "=== setting keys ==="
+          grep -rIhn "admob/" x --include=*.gd | head -40
