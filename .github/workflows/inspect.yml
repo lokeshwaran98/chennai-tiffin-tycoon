@@ -11,20 +11,19 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Get plugin
+      - name: Layout of zips
         run: |
           mkdir -p p && cd p
-          gh release download --repo poingstudios/godot-admob-plugin --pattern 'poing-godot-admob-v*.zip'
-          unzip -q -o poing-godot-admob-v*.zip -d x
-          cd x/poing-godot-admob
-          echo "=== TREE ==="; find . -not -path '*xcframework*' -not -path './addons/admob/ios*' | grep -v "/ios" | head -120
-      - name: Export plugin and library scripts
+          gh release download --repo poingstudios/godot-admob-plugin --pattern 'poing-godot-admob-v*.zip' --pattern 'android-template-v4.7.2.zip'
+          gh release download --repo poingstudios/godot-admob-android --pattern 'poing-godot-admob-android-v4.6.1.zip'
+          ls -la
+          echo "=== plugin zip top level ==="; unzip -l poing-godot-admob-v*.zip | awk '{print $4}' | grep -v "csharp\|xcframework\|/ios\|\.uid$\|\.import$\|translations\|docs/" | awk -F/ 'NF<=4' | head -60
+          echo "=== android lib zip ==="; unzip -l poing-godot-admob-android-v4.6.1.zip | head -40
+          echo "=== android-template zip ==="; unzip -l android-template-v4.7.2.zip | head -60
+      - name: Ads library export script
         run: |
-          cd p/x/poing-godot-admob/addons/admob/internal/exporters/android
-          for f in export_plugin.gd library.gd; do echo "=== $f ==="; cat $f; done
-      - name: Setting keys and plugin entry
-        run: |
-          cd p/x/poing-godot-admob/addons/admob
-          echo "=== admob.gd ==="; sed -n '1,120p' admob.gd
-          echo "=== setting key grep ==="
-          grep -rIn "ProjectSettings\|admob/" --include=*.gd . | grep -v "^./internal/exporters/ios" | head -60
+          cd p; unzip -q -o poing-godot-admob-v*.zip -d x
+          echo "=== ads gd ==="; grep -v "^#" x/ads/poing_godot_admob_ads.gd | head -70
+          echo "=== project_settings_service (defaults) ==="; grep -v "^#" x/poing-godot-admob/addons/admob/internal/services/project_settings_service.gd | sed -n '1,110p'
+          echo "=== android handler ==="; grep -v "^#" x/poing-godot-admob/addons/admob/internal/handlers/android_handler.gd | head -60
+          echo "=== binary installer ==="; grep -v "^#" x/poing-godot-admob/addons/admob/internal/services/network/binary_installer.gd | sed -n '1,120p'
