@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   GODOT_VERSION: "4.3"
 
@@ -67,7 +70,27 @@ jobs:
           godot --headless --import || true
           godot --headless --export-debug "Android" build/chennai-tiffin-tycoon.apk
 
+      - name: Verify APK
+        run: |
+          set -e
+          ls -la build/
+          SIZE=$(stat -c %s build/chennai-tiffin-tycoon.apk)
+          echo "APK size bytes: $SIZE"
+          [ "$SIZE" -gt 1000000 ]
+          unzip -l build/chennai-tiffin-tycoon.apk | grep -E "AndroidManifest.xml|classes.dex|lib/arm64-v8a/.*\.so|assets/.*\.pck" || true
+          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs build/chennai-tiffin-tycoon.apk | head -3
+          $ANDROID_HOME/build-tools/34.0.0/aapt dump badging build/chennai-tiffin-tycoon.apk | grep -E "^package|sdkVersion|native-code" | head -5
+
       - uses: actions/upload-artifact@v4
         with:
           name: chennai-tiffin-tycoon-apk
           path: build/chennai-tiffin-tycoon.apk
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v0.1.${{ github.run_number }}"
+          gh release create "$TAG" build/chennai-tiffin-tycoon.apk \
+            --title "Chennai Tiffin Tycoon $TAG (debug build)" \
+            --notes "Debug-signed test build. Enable 'install unknown apps' to sideload."
